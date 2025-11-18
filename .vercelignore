@@ -1,6 +1,6 @@
-server/
-node_modules/
-*.log
+.git
 .env
-.env.local
-
+node_modules
+server/
+*.md
+!README.md
