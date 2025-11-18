@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { School } from 'lucide-react';
@@ -10,6 +10,14 @@ const Login = () => {
   const [loading, setLoading] = useState(false);
   const { login } = useAuth();
   const navigate = useNavigate();
+  
+  // Check if API URL is configured
+  useEffect(() => {
+    const apiError = localStorage.getItem('api_config_error');
+    if (apiError === 'true') {
+      setError('⚠️ API URL غير مضبوط! يرجى إضافة VITE_API_URL في Vercel Environment Variables.');
+    }
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -20,7 +28,13 @@ const Login = () => {
       await login(email, password);
       navigate('/');
     } catch (err: any) {
-      setError(err.response?.data?.error || 'فشل تسجيل الدخول');
+      if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
+        setError('لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات API URL.');
+      } else if (err.response?.status === 404) {
+        setError('الخادم غير متاح. يرجى التحقق من إعدادات VITE_API_URL في Vercel.');
+      } else {
+        setError(err.response?.data?.error || 'فشل تسجيل الدخول');
+      }
     } finally {
       setLoading(false);
     }

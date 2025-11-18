@@ -7,24 +7,22 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'mask-icon.svg'],
+      includeAssets: ['favicon.ico'],
       manifest: {
-        name: 'School Management System',
+        name: 'نظام إدارة المدرسة',
         short_name: 'School App',
         description: 'Complete School Management Web Application',
         theme_color: '#3b82f6',
         icons: [
           {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            src: '/favicon.ico',
+            sizes: 'any',
+            type: 'image/x-icon'
           }
         ]
+      },
+      workbox: {
+        globPatterns: ['**/*.{js,css,html,ico,png,svg}']
       }
     })
   ],
