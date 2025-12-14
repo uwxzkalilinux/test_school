@@ -25,8 +25,20 @@ const Login = () => {
     setLoading(true);
 
     try {
-      await login(email, password);
-      navigate('/');
+      const response = await login(email, password);
+      // Get user role and navigate to appropriate dashboard
+      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+      if (userRole === 'admin') {
+        navigate('/admin/');
+      } else if (userRole === 'teacher') {
+        navigate('/teacher/');
+      } else if (userRole === 'student') {
+        navigate('/student/');
+      } else if (userRole === 'parent') {
+        navigate('/parent/');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       if (err.code === 'ERR_NETWORK' || err.message?.includes('Network Error')) {
         setError('لا يمكن الاتصال بالخادم. يرجى التحقق من إعدادات API URL.');

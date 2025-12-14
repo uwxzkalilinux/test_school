@@ -31,15 +31,30 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
     const savedUser = localStorage.getItem('user');
     
     if (token && savedUser) {
-      setUser(JSON.parse(savedUser));
-      // Verify token is still valid
-      api.get('/auth/me')
-        .then((res) => setUser(res.data))
-        .catch(() => {
-          localStorage.removeItem('token');
-          localStorage.removeItem('user');
-        })
-        .finally(() => setLoading(false));
+      try {
+        const parsedUser = JSON.parse(savedUser);
+        setUser(parsedUser);
+        // Verify token is still valid
+        api.get('/auth/me')
+          .then((res) => {
+            if (res.data) {
+              setUser(res.data);
+              localStorage.setItem('user', JSON.stringify(res.data));
+            }
+          })
+          .catch((error) => {
+            console.error('Token verification failed:', error);
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            setUser(null);
+          })
+          .finally(() => setLoading(false));
+      } catch (error) {
+        console.error('Failed to parse saved user:', error);
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        setLoading(false);
+      }
     } else {
       setLoading(false);
     }

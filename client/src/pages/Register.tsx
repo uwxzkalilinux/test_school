@@ -43,7 +43,19 @@ const Register = () => {
         classId: formData.classId || undefined,
         studentId: formData.studentId || undefined,
       });
-      navigate('/');
+      // Get user role and navigate to appropriate dashboard
+      const userRole = JSON.parse(localStorage.getItem('user') || '{}').role;
+      if (userRole === 'admin') {
+        navigate('/admin/');
+      } else if (userRole === 'teacher') {
+        navigate('/teacher/');
+      } else if (userRole === 'student') {
+        navigate('/student/');
+      } else if (userRole === 'parent') {
+        navigate('/parent/');
+      } else {
+        navigate('/');
+      }
     } catch (err: any) {
       setError(err.response?.data?.error || 'فشل التسجيل');
     } finally {

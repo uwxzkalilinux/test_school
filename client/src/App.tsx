@@ -49,10 +49,26 @@ const AppRoutes = () => {
         }
       />
       <Route
+        path="/admin"
+        element={
+          <PrivateRoute allowedRoles={['admin']}>
+            <Navigate to="/admin/" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
         path="/teacher/*"
         element={
           <PrivateRoute allowedRoles={['teacher']}>
             <TeacherDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/teacher"
+        element={
+          <PrivateRoute allowedRoles={['teacher']}>
+            <Navigate to="/teacher/" replace />
           </PrivateRoute>
         }
       />
@@ -65,10 +81,26 @@ const AppRoutes = () => {
         }
       />
       <Route
+        path="/student"
+        element={
+          <PrivateRoute allowedRoles={['student']}>
+            <Navigate to="/student/" replace />
+          </PrivateRoute>
+        }
+      />
+      <Route
         path="/parent/*"
         element={
           <PrivateRoute allowedRoles={['parent']}>
             <ParentDashboard />
+          </PrivateRoute>
+        }
+      />
+      <Route
+        path="/parent"
+        element={
+          <PrivateRoute allowedRoles={['parent']}>
+            <Navigate to="/parent/" replace />
           </PrivateRoute>
         }
       />
@@ -79,16 +111,17 @@ const AppRoutes = () => {
             <Navigate
               to={
                 user.role === 'admin'
-                  ? '/admin'
+                  ? '/admin/'
                   : user.role === 'teacher'
-                  ? '/teacher'
+                  ? '/teacher/'
                   : user.role === 'student'
-                  ? '/student'
-                  : '/parent'
+                  ? '/student/'
+                  : '/parent/'
               }
+              replace
             />
           ) : (
-            <Navigate to="/login" />
+            <Navigate to="/login" replace />
           )
         }
       />
