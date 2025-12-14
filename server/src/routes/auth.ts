@@ -1,7 +1,7 @@
 import express from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
-import { getDatabase, saveDatabase, User } from '../database/index.js';
+import { supabaseDb } from '../database/index.js';
 import { authenticate, AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -11,33 +11,28 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your-secret-key-change-in-producti
 router.post('/register', async (req, res) => {
   try {
     const { name, email, password, role, parentOf } = req.body;
-    const db = getDatabase();
 
     // Check if user exists
-    if (db.users.find(u => u.email === email)) {
+    const existingUser = await supabaseDb.getUserByEmail(email);
+    if (existingUser) {
       return res.status(400).json({ error: 'User already exists' });
     }
 
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    const newUser: User = {
-      id: `user-${Date.now()}`,
+    // Create user
+    const newUser = await supabaseDb.createUser({
       name,
       email,
       password: hashedPassword,
       role,
       parentOf: parentOf || [],
-      createdAt: new Date().toISOString(),
-    };
-
-    db.users.push(newUser);
-    saveDatabase();
+    });
 
     // Create role-specific records
     if (role === 'student') {
-      db.students.push({
-        id: `student-${Date.now()}`,
+      await supabaseDb.createStudent({
         userId: newUser.id,
         name,
         classId: req.body.classId || '',
@@ -45,15 +40,12 @@ router.post('/register', async (req, res) => {
         studentId: req.body.studentId || `STU-${Date.now()}`,
       });
     } else if (role === 'teacher') {
-      db.teachers.push({
-        id: `teacher-${Date.now()}`,
+      await supabaseDb.createTeacher({
         userId: newUser.id,
         name,
         subjectIds: [],
       });
     }
-
-    saveDatabase();
 
     const token = jwt.sign(
       { id: newUser.id, email: newUser.email, role: newUser.role },
@@ -70,8 +62,9 @@ router.post('/register', async (req, res) => {
         role: newUser.role,
       },
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+  } catch (error: any) {
+    console.error('Register error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
 });
 
@@ -79,9 +72,8 @@ router.post('/register', async (req, res) => {
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
-    const db = getDatabase();
 
-    const user = db.users.find(u => u.email === email);
+    const user = await supabaseDb.getUserByEmail(email);
     if (!user) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
@@ -106,26 +98,31 @@ router.post('/login', async (req, res) => {
         role: user.role,
       },
     });
-  } catch (error) {
-    res.status(500).json({ error: 'Server error' });
+  } catch (error: any) {
+    console.error('Login error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
 });
 
 // Get current user
-router.get('/me', authenticate, (req: AuthRequest, res) => {
-  const db = getDatabase();
-  const user = db.users.find(u => u.id === req.user!.id);
-  
-  if (!user) {
-    return res.status(404).json({ error: 'User not found' });
-  }
+router.get('/me', authenticate, async (req: AuthRequest, res) => {
+  try {
+    const user = await supabaseDb.getUserById(req.user!.id);
+    
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
 
-  res.json({
-    id: user.id,
-    name: user.name,
-    email: user.email,
-    role: user.role,
-  });
+    res.json({
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+    });
+  } catch (error: any) {
+    console.error('Get me error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 export default router;

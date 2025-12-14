@@ -54,7 +54,7 @@ Vercel مناسب للـ frontend فقط. يجب رفع الـ backend على خ
 app.use(cors({
   origin: process.env.FRONTEND_URL || '*',
   credentials: true,
-}));
+}));image.png
 ```
 
 أضف `FRONTEND_URL` في environment variables للـ backend:

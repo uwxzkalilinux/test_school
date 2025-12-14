@@ -1,158 +1,87 @@
 import express from 'express';
-import { getDatabase, saveDatabase } from '../database/index.js';
+import { supabaseDb } from '../database/index.js';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Get all subjects
-router.get('/', authenticate, (req, res) => {
-  const db = getDatabase();
-  res.json(db.subjects);
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const subjects = await supabaseDb.getSubjects();
+    res.json(subjects);
+  } catch (error: any) {
+    console.error('Get subjects error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 // Get subject by ID
-router.get('/:id', authenticate, (req, res) => {
-  const db = getDatabase();
-  const subject = db.subjects.find(s => s.id === req.params.id);
-  
-  if (!subject) {
-    return res.status(404).json({ error: 'Subject not found' });
-  }
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const subject = await supabaseDb.getSubjectById(req.params.id);
+    
+    if (!subject) {
+      return res.status(404).json({ error: 'Subject not found' });
+    }
 
-  res.json(subject);
+    res.json(subject);
+  } catch (error: any) {
+    console.error('Get subject error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 // Create subject (Admin only)
-router.post('/', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const { name, teacherId, classIds, code } = req.body;
+router.post('/', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { name, teacherId, classIds, code } = req.body;
 
-  const newSubject = {
-    id: `subject-${Date.now()}`,
-    name,
-    teacherId,
-    classIds: classIds || [],
-    code: code || name.substring(0, 3).toUpperCase(),
-  };
-
-  db.subjects.push(newSubject);
-  
-  // Update teacher's subjectIds
-  if (teacherId) {
-    const teacher = db.teachers.find(t => t.id === teacherId);
-    if (teacher && !teacher.subjectIds.includes(newSubject.id)) {
-      teacher.subjectIds.push(newSubject.id);
+    if (!name || !code) {
+      return res.status(400).json({ error: 'Name and code are required' });
     }
-  }
-  
-  // Update classes to include this subject's teacher
-  if (teacherId && classIds && classIds.length > 0) {
-    classIds.forEach((classId: string) => {
-      const classItem = db.classes.find(c => c.id === classId);
-      if (classItem && teacherId) {
-        const teacher = db.teachers.find(t => t.id === teacherId);
-        if (teacher && !classItem.teacherIds.includes(teacher.id)) {
-          classItem.teacherIds.push(teacher.id);
-        }
-      }
+
+    const newSubject = await supabaseDb.createSubject({
+      name,
+      code,
+      teacherId: teacherId || '',
+      classIds: classIds || [],
     });
+
+    res.status(201).json(newSubject);
+  } catch (error: any) {
+    console.error('Create subject error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
-  
-  saveDatabase();
-  res.status(201).json(newSubject);
 });
 
 // Update subject (Admin only)
-router.put('/:id', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const subjectIndex = db.subjects.findIndex(s => s.id === req.params.id);
-  
-  if (subjectIndex === -1) {
-    return res.status(404).json({ error: 'Subject not found' });
-  }
+router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { name, teacherId, classIds, code } = req.body;
+    const updates: any = {};
+    
+    if (name) updates.name = name;
+    if (code) updates.code = code;
+    if (teacherId !== undefined) updates.teacherId = teacherId;
+    if (classIds !== undefined) updates.classIds = classIds;
 
-  const { name, teacherId, classIds, code } = req.body;
-  const oldSubject = { ...db.subjects[subjectIndex] };
-  
-  if (name) db.subjects[subjectIndex].name = name;
-  if (teacherId !== undefined) {
-    // Remove from old teacher
-    if (oldSubject.teacherId) {
-      const oldTeacher = db.teachers.find(t => t.id === oldSubject.teacherId);
-      if (oldTeacher) {
-        oldTeacher.subjectIds = oldTeacher.subjectIds.filter(id => id !== req.params.id);
-      }
-    }
-    // Add to new teacher
-    db.subjects[subjectIndex].teacherId = teacherId;
-    if (teacherId) {
-      const teacher = db.teachers.find(t => t.id === teacherId);
-      if (teacher && !teacher.subjectIds.includes(req.params.id)) {
-        teacher.subjectIds.push(req.params.id);
-      }
-    }
+    const updatedSubject = await supabaseDb.updateSubject(req.params.id, updates);
+    res.json(updatedSubject);
+  } catch (error: any) {
+    console.error('Update subject error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
-  if (classIds !== undefined) {
-    db.subjects[subjectIndex].classIds = classIds;
-    // Update classes
-    if (teacherId || oldSubject.teacherId) {
-      const currentTeacherId = teacherId || oldSubject.teacherId;
-      // Remove from old classes
-      oldSubject.classIds.forEach((classId: string) => {
-        const classItem = db.classes.find(c => c.id === classId);
-        if (classItem && oldSubject.teacherId) {
-          classItem.teacherIds = classItem.teacherIds.filter(id => id !== oldSubject.teacherId);
-        }
-      });
-      // Add to new classes
-      if (classIds && classIds.length > 0 && currentTeacherId) {
-        const teacher = db.teachers.find(t => t.id === currentTeacherId);
-        if (teacher) {
-          classIds.forEach((classId: string) => {
-            const classItem = db.classes.find(c => c.id === classId);
-            if (classItem && !classItem.teacherIds.includes(teacher.id)) {
-              classItem.teacherIds.push(teacher.id);
-            }
-          });
-        }
-      }
-    }
-  }
-  if (code) db.subjects[subjectIndex].code = code;
-
-  saveDatabase();
-  res.json(db.subjects[subjectIndex]);
 });
 
 // Delete subject (Admin only)
-router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const subjectIndex = db.subjects.findIndex(s => s.id === req.params.id);
-  
-  if (subjectIndex === -1) {
-    return res.status(404).json({ error: 'Subject not found' });
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    await supabaseDb.deleteSubject(req.params.id);
+    res.json({ message: 'Subject deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete subject error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
-
-  const subjectId = req.params.id;
-  
-  // Remove from teachers
-  db.teachers.forEach(teacher => {
-    teacher.subjectIds = teacher.subjectIds.filter(id => id !== subjectId);
-  });
-  
-  // Remove related data
-  db.attendance = db.attendance.filter(a => a.subjectId !== subjectId);
-  db.grades = db.grades.filter(g => g.subjectId !== subjectId);
-  db.assignments = db.assignments.filter(a => a.subjectId !== subjectId);
-  db.timetable = db.timetable.filter(t => t.subjectId !== subjectId);
-  db.announcements = db.announcements.filter(a => 
-    !(a.targetGroup === 'subject' && a.targetIds.includes(subjectId))
-  );
-
-  db.subjects.splice(subjectIndex, 1);
-  saveDatabase();
-  res.json({ message: 'Subject deleted successfully' });
 });
 
 export default router;
-

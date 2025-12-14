@@ -1,92 +1,85 @@
 import express from 'express';
-import { getDatabase, saveDatabase } from '../database/index.js';
+import { supabaseDb } from '../database/index.js';
 import { authenticate, authorize, AuthRequest } from '../middleware/auth.js';
 
 const router = express.Router();
 
 // Get all classes
-router.get('/', authenticate, (req, res) => {
-  const db = getDatabase();
-  res.json(db.classes);
+router.get('/', authenticate, async (req, res) => {
+  try {
+    const classes = await supabaseDb.getClasses();
+    res.json(classes);
+  } catch (error: any) {
+    console.error('Get classes error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 // Get class by ID
-router.get('/:id', authenticate, (req, res) => {
-  const db = getDatabase();
-  const classItem = db.classes.find(c => c.id === req.params.id);
-  
-  if (!classItem) {
-    return res.status(404).json({ error: 'Class not found' });
-  }
+router.get('/:id', authenticate, async (req, res) => {
+  try {
+    const classItem = await supabaseDb.getClassById(req.params.id);
+    
+    if (!classItem) {
+      return res.status(404).json({ error: 'Class not found' });
+    }
 
-  res.json(classItem);
+    res.json(classItem);
+  } catch (error: any) {
+    console.error('Get class error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 // Create class (Admin only)
-router.post('/', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const { name, level, teacherIds, studentIds } = req.body;
+router.post('/', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { name, level } = req.body;
 
-  const newClass = {
-    id: `class-${Date.now()}`,
-    name,
-    level,
-    teacherIds: teacherIds || [],
-    studentIds: studentIds || [],
-  };
+    if (!name || !level) {
+      return res.status(400).json({ error: 'Name and level are required' });
+    }
 
-  db.classes.push(newClass);
-  saveDatabase();
-  res.status(201).json(newClass);
+    const newClass = await supabaseDb.createClass({
+      name,
+      level,
+      teacherIds: [],
+      studentIds: [],
+    });
+
+    res.status(201).json(newClass);
+  } catch (error: any) {
+    console.error('Create class error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
+  }
 });
 
 // Update class (Admin only)
-router.put('/:id', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const classIndex = db.classes.findIndex(c => c.id === req.params.id);
-  
-  if (classIndex === -1) {
-    return res.status(404).json({ error: 'Class not found' });
+router.put('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    const { name, level } = req.body;
+    const updates: any = {};
+    
+    if (name) updates.name = name;
+    if (level) updates.level = level;
+
+    const updatedClass = await supabaseDb.updateClass(req.params.id, updates);
+    res.json(updatedClass);
+  } catch (error: any) {
+    console.error('Update class error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
-
-  const { name, level, teacherIds, studentIds } = req.body;
-  if (name) db.classes[classIndex].name = name;
-  if (level) db.classes[classIndex].level = level;
-  if (teacherIds) db.classes[classIndex].teacherIds = teacherIds;
-  if (studentIds) db.classes[classIndex].studentIds = studentIds;
-
-  saveDatabase();
-  res.json(db.classes[classIndex]);
 });
 
 // Delete class (Admin only)
-router.delete('/:id', authenticate, authorize('admin'), (req, res) => {
-  const db = getDatabase();
-  const classIndex = db.classes.findIndex(c => c.id === req.params.id);
-  
-  if (classIndex === -1) {
-    return res.status(404).json({ error: 'Class not found' });
+router.delete('/:id', authenticate, authorize('admin'), async (req, res) => {
+  try {
+    await supabaseDb.deleteClass(req.params.id);
+    res.json({ message: 'Class deleted successfully' });
+  } catch (error: any) {
+    console.error('Delete class error:', error);
+    res.status(500).json({ error: error.message || 'Server error' });
   }
-
-  const classId = req.params.id;
-  
-  // Remove class from subjects
-  db.subjects.forEach(subject => {
-    subject.classIds = subject.classIds.filter(id => id !== classId);
-  });
-  
-  // Remove timetable entries
-  db.timetable = db.timetable.filter(t => t.classId !== classId);
-  
-  // Remove announcements targeting this class
-  db.announcements = db.announcements.filter(a => 
-    !(a.targetGroup === 'class' && a.targetIds.includes(classId))
-  );
-
-  db.classes.splice(classIndex, 1);
-  saveDatabase();
-  res.json({ message: 'Class deleted successfully' });
 });
 
 export default router;
-
